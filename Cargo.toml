@@ -1,0 +1,20 @@
+[package]
+name = "gib2sgf"
+version = "0.1.0"
+authors = ["Juha Komulainen <juha.komulainen@evident.fi>"]
+edition = "2018"
+license = "MIT"
+
+[lib]
+name = "gib2sgf"
+path = "src/lib.rs"
+
+[[bin]]
+name = "gib2sgf"
+path = "src/main.rs"
+
+[dependencies]
+regex = "1"
+linked-hash-map = "0.5"
+datetime = "0.5"
+filetime = "0.2"
