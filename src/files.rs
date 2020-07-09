@@ -37,7 +37,7 @@ fn normalize_file_name(name: &str) -> String {
         let mut result = name;
         loop {
             let previous = result;
-            result = result.trim_end_matches(".gib").trim_end_matches(".dll").trim_end_matches(".");
+            result = result.trim_end_matches(".gib").trim_end_matches(".dll").trim_end_matches('.');
             if result.len() == previous.len() {
                 break
             }

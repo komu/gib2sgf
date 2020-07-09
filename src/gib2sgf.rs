@@ -2,7 +2,7 @@ use crate::gib::{Gib, GibParseError};
 use crate::sgf::{SgfCollection, SgfTree, SgfNode};
 use crate::go::PlayerColor;
 
-const VERSION: &'static str = env!("CARGO_PKG_VERSION");
+const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 ///
 /// Converts a GIB file to SGF. Both the input and output are represented

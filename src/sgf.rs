@@ -114,8 +114,8 @@ impl ToSgf for LocalDate {
 
 impl ToSgf for BoardCoordinate {
     fn to_sgf(&self) -> String {
-        let x = (('a' as u8) + self.x) as char;
-        let y = (('a' as u8) + self.y) as char;
+        let x = (b'a' + self.x) as char;
+        let y = (b'a' + self.y) as char;
         format!("{}{}", x, y)
     }
 }
@@ -189,5 +189,12 @@ mod tests {
         assert_eq!(GameResult::Resign(PlayerColor::White).to_sgf(), "W+R");
         assert_eq!(GameResult::Time(PlayerColor::White).to_sgf(), "W+T");
         assert_eq!(GameResult::Forfeit(PlayerColor::White).to_sgf(), "W+F");
+    }
+
+    #[test]
+    fn board_coordinates() {
+        assert_eq!(BoardCoordinate { x: 0, y: 0 }.to_sgf(), "aa");
+        assert_eq!(BoardCoordinate { x: 4, y: 8 }.to_sgf(), "ei");
+        assert_eq!(BoardCoordinate { x: 18, y: 17 }.to_sgf(), "sr");
     }
 }

@@ -86,7 +86,7 @@ impl Display for Handicap {
 
 impl Debug for BoardCoordinate {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        let c = ('a' as u8 + self.x - 1) as char;
+        let c = (b'a' + self.x - 1) as char;
         f.write_fmt(format_args!("{}{}", c, self.y))
     }
 }

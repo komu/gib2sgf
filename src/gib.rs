@@ -5,7 +5,6 @@
 //!
 //! Things not yet supported:
 //!   - handicaps
-//!   - mapping most ranks
 //!   - time settings
 //!   - probably many different interesting things
 //!
@@ -142,7 +141,7 @@ impl GameResult {
 
         let mut result = HashMap::new();
 
-        for part in s.split(",") {
+        for part in s.split(',') {
             if let Some(captures) = regex.captures(part) {
                 result.insert(captures.index(1).to_string(), captures.index(2).to_string());
             }
@@ -185,21 +184,6 @@ fn parse_gib_name(str: &str) -> Option<(&str, &str)> {
     let name = captures.get(1)?.as_str();
     let rank = captures.get(2)?.as_str();
     Some((name, rank))
-}
-
-fn convert_rank(level: &str) -> &str {
-    match level {
-        "18" => "1d",
-        "19" => "2d",
-        "20" => "3d",
-        "21" => "4d",
-        "22" => "5d",
-        "23" => "6d",
-        "24" => "7d",
-        "25" => "8d",
-        "26" => "9d",
-        _ => level  // TODO
-    }
 }
 
 #[cfg(test)]
