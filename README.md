@@ -2,6 +2,8 @@
 
 Converts GIB files used by Tygem to SGF.
 
+![Rust](https://github.com/komu/gib2sgf/workflows/Rust/badge.svg)
+
 ## Install
 
 ```
