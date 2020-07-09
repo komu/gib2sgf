@@ -52,7 +52,6 @@ impl Gib {
                 let key = captures.index(1);
                 let value = captures.index(2);
                 raw_attributes.insert(key.to_string(), value.to_string());
-
             } else if let Some(captures) = move_regex.captures(line) {
                 // Assume that the moves are in order and we don't need move numbers for anything
                 moves.push(GoMove {
@@ -82,11 +81,15 @@ impl Gib {
     }
 
     pub fn get_nick(&self, color: PlayerColor) -> Option<&str> {
-        self.get_attribute(color.pick("GAMEBLACKNICK", "GAMEWHITENICK"))
+        let attribute = self.get_attribute(color.pick("GAMEBLACKNAME", "GAMEWHITENAME"))?;
+        let (name, _) = parse_gib_name(attribute)?;
+        Some(name)
     }
 
     pub fn get_rank(&self, color: PlayerColor) -> Option<&str> {
-        self.get_attribute(color.pick("GAMEBLACKLEVEL", "GAMEWHITELEVEL")).map(convert_rank)
+        let attribute = self.get_attribute(color.pick("GAMEBLACKNAME", "GAMEWHITENAME"))?;
+        let (_, rank) = parse_gib_name(attribute)?;
+        Some(rank)
     }
 
     pub fn get_komi(&self) -> Option<Score> {
@@ -175,6 +178,15 @@ fn parse_gib_date(str: &str) -> Option<LocalDate> {
     LocalDate::ymd(year, month, day).ok()
 }
 
+/// Extract name and rank from name attribute of form `name (rank)`.
+fn parse_gib_name(str: &str) -> Option<(&str, &str)> {
+    let regex = Regex::new(r"^(.+) \((.+)\)$").unwrap();
+    let captures = regex.captures(str)?;
+    let name = captures.get(1)?.as_str();
+    let rank = captures.get(2)?.as_str();
+    Some((name, rank))
+}
+
 fn convert_rank(level: &str) -> &str {
     match level {
         "18" => "1d",
@@ -201,10 +213,8 @@ mod tests {
 \[GAMEGONGJE=65\]
 \[GAMEDATE=2020- 3-13-23-21-56\]
 \[GAMEPLACE=Tygem Baduk\]
-\[GAMEWHITELEVEL=19\]
-\[GAMEWHITENICK=TheWhite\]
-\[GAMEBLACKLEVEL=19\]
-\[GAMEBLACKNICK=TheBlack\]
+\[GAMEWHITENAME=TheWhite (2D)\]
+\[GAMEBLACKNAME=TheBlack (2D)\]
 \[GAMEINFOMAIN=GBKIND:3,GTYPE:0,GCDT:0,GTIME:600-30-3,GRLT:3,ZIPSU:35,DUM:0,GONGJE:65,TCNT:185,AUSZ:0\]
 \HE
 \GS
@@ -218,8 +228,8 @@ STO 0 3 2 15 16
 
         assert_eq!(gib.get_nick(PlayerColor::Black), Some("TheBlack"));
         assert_eq!(gib.get_nick(PlayerColor::White), Some("TheWhite"));
-        assert_eq!(gib.get_rank(PlayerColor::White), Some("2d"));
-        assert_eq!(gib.get_rank(PlayerColor::Black), Some("2d"));
+        assert_eq!(gib.get_rank(PlayerColor::White), Some("2D"));
+        assert_eq!(gib.get_rank(PlayerColor::Black), Some("2D"));
         assert_eq!(gib.get_komi(), Some(Score::new(6.5)));
         assert_eq!(gib.get_date(), LocalDate::ymd(2020, Month::March, 13).ok());
         assert_eq!(gib.get_game_place(), Some("Tygem Baduk"));
@@ -241,5 +251,12 @@ STO 0 3 2 15 16
         assert_eq!(GameResult::from_gib("GBKIND:3,GTYPE:0,GCDT:0,GTIME:600-30-3,GRLT:3,ZIPSU:0,DUM:0,GONGJE:65,TCNT:185,AUSZ:0"), Some(GameResult::Resign(Black)));
         assert_eq!(GameResult::from_gib("GBKIND:3,GTYPE:0,GCDT:0,GTIME:600-30-3,GRLT:0,ZIPSU:35,DUM:0,GONGJE:65,TCNT:185,AUSZ:0"), Some(GameResult::Count(Black, Some(Score::new(3.5)))));
         assert_eq!(GameResult::from_gib("GBKIND:3,GTYPE:0,GCDT:0,GTIME:600-30-3,GRLT:7,ZIPSU:0,DUM:0,GONGJE:65,TCNT:185,AUSZ:0"), Some(GameResult::Time(Black)));
+    }
+
+    #[test]
+    fn test_parse_name() {
+        assert_eq!(parse_gib_name(""), None);
+        assert_eq!(parse_gib_name("Foo"), None);
+        assert_eq!(parse_gib_name("Foo (2D)"), Some(("Foo", "2D")));
     }
 }

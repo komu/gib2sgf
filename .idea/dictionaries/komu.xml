@@ -2,12 +2,14 @@
   <dictionary name="komu">
     <words>
       <w>gameblacklevel</w>
+      <w>gameblackname</w>
       <w>gameblacknick</w>
       <w>gamedate</w>
       <w>gamegongje</w>
       <w>gameinfomain</w>
       <w>gameplace</w>
       <w>gamewhitelevel</w>
+      <w>gamewhitename</w>
       <w>gamewhitenick</w>
       <w>jigo</w>
       <w>komi</w>
