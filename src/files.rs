@@ -1,6 +1,5 @@
 use std::{fs, io};
 use std::path::{Path, PathBuf};
-use std::ffi::OsStr;
 
 pub fn collect_files(dir: &Path) -> io::Result<Vec<Box<Path>>> {
     let mut result = Vec::new();
@@ -13,9 +12,10 @@ fn collect_files_into(dir: &Path, result: &mut Vec<Box<Path>>) -> io::Result<()>
         for entry in fs::read_dir(dir)? {
             let entry = entry?;
             let path = entry.path();
+            let name = path.file_name().map(|s| s.to_str()).flatten().unwrap_or("");
             if path.is_dir() {
                 collect_files_into(&path, result)?;
-            } else if path.is_file() && path.extension() == Some(OsStr::new("gib")) {
+            } else if path.is_file() && name.ends_with(".gib") || name.ends_with(".gib.dll") {
                 result.push(path.into_boxed_path());
             }
         }

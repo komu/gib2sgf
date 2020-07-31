@@ -10,6 +10,7 @@ fn main() {
     let args: Vec<String> = env::args().collect();
 
     let files = collect_files(Path::new(args.get(1).unwrap_or(&String::from(".")))).unwrap();
+    let mut converted = false;
 
     for gib_path in files {
         let sgf_path = normalize_path(&gib_path).with_extension("sgf");
@@ -26,9 +27,11 @@ fn main() {
             let metadata = fs::metadata(&gib_path).unwrap();
             let mtime = FileTime::from_last_modification_time(&metadata);
             filetime::set_file_mtime(&sgf_path, mtime).unwrap();
-
-        } else {
-            println!("Skip    {:?} -> {:?}", gib_path, sgf_path);
+            converted = true
         }
+    }
+
+    if !converted {
+        println!("no unconverted files")
     }
 }
