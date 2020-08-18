@@ -1,3 +1,4 @@
+mod time;
 mod gib;
 mod go;
 mod sgf;

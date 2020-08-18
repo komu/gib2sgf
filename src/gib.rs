@@ -10,10 +10,10 @@
 //!
 use std::collections::HashMap;
 use regex::Regex;
-use crate::go::{PlayerColor, BoardCoordinate, Score, GameResult, Handicap};
 use std::ops::Index;
 use std::num::ParseIntError;
-use datetime::{LocalDate, Month};
+use crate::go::{PlayerColor, BoardCoordinate, Score, GameResult, Handicap};
+use crate::time::LocalDate;
 
 #[derive(Debug)]
 pub struct Gib {
@@ -171,10 +171,10 @@ fn parse_gib_date(str: &str) -> Option<LocalDate> {
     let regex = Regex::new(r"^(\d{4})- ?(\d*)- ?(\d*)(-.+)?$").unwrap();
 
     let captures = regex.captures(str)?;
-    let year: i64 = captures.index(1).parse().ok()?;
-    let month = Month::from_one(captures.index(2).parse().ok()?).ok()?;
+    let year: i16 = captures.index(1).parse().ok()?;
+    let month: i8 = captures.index(2).parse().ok()?;
     let day: i8 = captures.index(3).parse().ok()?;
-    LocalDate::ymd(year, month, day).ok()
+    LocalDate::ymd(year, month, day)
 }
 
 /// Extract name and rank from name attribute of form `name (rank)`.
@@ -215,7 +215,7 @@ STO 0 3 2 15 16
         assert_eq!(gib.get_rank(PlayerColor::White), Some("2D"));
         assert_eq!(gib.get_rank(PlayerColor::Black), Some("2D"));
         assert_eq!(gib.get_komi(), Some(Score::new(6.5)));
-        assert_eq!(gib.get_date(), LocalDate::ymd(2020, Month::March, 13).ok());
+        assert_eq!(gib.get_date(), LocalDate::ymd(2020, 3, 13));
         assert_eq!(gib.get_game_place(), Some("Tygem Baduk"));
 
         assert_eq!(gib.get_moves().len(), 2);
@@ -227,7 +227,7 @@ STO 0 3 2 15 16
 
     #[test]
     fn test_date_parsing() {
-        assert_eq!(parse_gib_date("2020- 3-13-23-21-56"), LocalDate::ymd(2020, Month::March, 13).ok());
+        assert_eq!(parse_gib_date("2020- 3-13-23-21-56"), LocalDate::ymd(2020, 3, 13));
     }
 
     #[test]

@@ -1,6 +1,6 @@
 use linked_hash_map::LinkedHashMap;
 use crate::go::{PlayerColor, BoardCoordinate, Score, GameResult, Handicap};
-use datetime::{LocalDate, ISO};
+use crate::time::LocalDate;
 
 pub struct SgfCollection {
     trees: Vec<SgfTree>
@@ -108,7 +108,7 @@ impl ToSgf for Score {
 
 impl ToSgf for LocalDate {
     fn to_sgf(&self) -> String {
-        self.iso().to_string()
+        self.iso_string()
     }
 }
 
@@ -152,7 +152,6 @@ impl ToSgf for Handicap {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use datetime::Month;
     use crate::go::GameResult;
 
     #[test]
@@ -166,7 +165,7 @@ mod tests {
 
         root.set_property("RE", "B+37.5");
         root.set_property("KM", Score::new(6.5));
-        root.set_property("DT", LocalDate::ymd(2020, Month::February, 29).unwrap());
+        root.set_property("DT", LocalDate::ymd(2020, 2, 29).unwrap());
         root.set_property("FF", "4");
         root.set_property("GM", "1");
         root.set_property("CA", "UTF-8");

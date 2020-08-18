@@ -16,5 +16,4 @@ path = "src/main.rs"
 [dependencies]
 regex = "1"
 linked-hash-map = "0.5"
-datetime = "0.5"
 filetime = "0.2"
