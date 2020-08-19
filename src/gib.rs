@@ -154,19 +154,15 @@ impl GameResult {
 fn parse_gib_date(str: &str) -> GibResult<LocalDate> {
     let mut lexer = Lexer::new(str);
 
-    let year = lexer.read_number::<i16>()?;
+    let year = lexer.read_number::<u16>()?;
     lexer.expect("-")?;
     lexer.optional(" ");
-    let month = lexer.read_number::<i8>()?;
+    let month = lexer.read_number::<u8>()?;
     lexer.expect("-")?;
     lexer.optional(" ");
-    let day = lexer.read_number::<i8>()?;
+    let day = lexer.read_number::<u8>()?;
 
-    if let Some(d) = LocalDate::ymd(year, month, day) {
-        Ok(d)
-    } else {
-        Err(format!("invalid date {}-{}-{}", year, month, day))
-    }
+    LocalDate::ymd(year, month, day)
 }
 
 /// Extract name and rank from name attribute of form `name (rank)`.
@@ -213,7 +209,7 @@ fn parse_move_line(str: &str) -> GibResult<GoMove> {
     lexer.expect(" ")?;
     let y = lexer.read_number::<u8>()?;
 
-    return Ok(GoMove { player, coordinate: BoardCoordinate { x, y } });
+    Ok(GoMove { player, coordinate: BoardCoordinate { x, y } })
 }
 
 /// Extract handicap from line of form `INI <num> <num> <handicap>`
@@ -263,7 +259,7 @@ STO 0 3 2 15 16
         assert_eq!(gib.get_rank(PlayerColor::White), Some("2D"));
         assert_eq!(gib.get_rank(PlayerColor::Black), Some("2D"));
         assert_eq!(gib.get_komi(), Some(Score::new(6.5)));
-        assert_eq!(gib.get_date(), LocalDate::ymd(2020, 3, 13));
+        assert_eq!(gib.get_date(), LocalDate::ymd(2020, 3, 13).ok());
         assert_eq!(gib.get_game_place(), Some("Tygem Baduk"));
 
         assert_eq!(gib.get_moves().len(), 2);
@@ -275,7 +271,7 @@ STO 0 3 2 15 16
 
     #[test]
     fn test_date_parsing() {
-        assert_eq!(parse_gib_date("2020- 3-13-23-21-56").ok(), LocalDate::ymd(2020, 3, 13));
+        assert_eq!(parse_gib_date("2020- 3-13-23-21-56"), LocalDate::ymd(2020, 3, 13));
     }
 
     #[test]
