@@ -1,9 +1,11 @@
 [package]
 name = "gib2sgf"
-version = "0.1.0"
+version = "0.1.2"
 authors = ["Juha Komulainen <juha.komulainen@evident.fi>"]
 edition = "2018"
 license = "MIT"
+repository = "https://github.com/komu/gib2sgf"
+description = "Gib to SGF translator"
 
 [lib]
 name = "gib2sgf"
