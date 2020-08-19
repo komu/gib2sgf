@@ -3,6 +3,7 @@ mod gib;
 mod go;
 mod sgf;
 mod gib2sgf;
+mod lexer;
 use wasm_bindgen::prelude::*;
 
 pub use crate::gib2sgf::gib_to_sgf;

@@ -9,9 +9,9 @@
 //!   - probably many different interesting things
 //!
 use std::collections::HashMap;
-use std::num::ParseIntError;
 use crate::go::{PlayerColor, BoardCoordinate, Score, GameResult, Handicap};
 use crate::time::LocalDate;
+use crate::lexer::Lexer;
 
 #[derive(Debug)]
 pub struct Gib {
@@ -38,15 +38,21 @@ impl Gib {
 
         // Technically there's a separate header section separated by "\HS" and "\HE" lines
         // and a game section separated by "\GS" and "\GE" lines. We don't care about that
-        // and just loop through everything looking for lines that match our regexes.
+        // and just loop through everything looking for lines that match our patterns.
 
         for line in str.lines() {
-            if let Some((key, value)) = parse_metadata_line(line) {
+            if line.starts_with(r"\[") {
+                let (key, value) = parse_metadata_line(line)?;
                 raw_attributes.insert(key.to_string(), value.to_string());
-            } else if let Some(mv) = parse_move_line(line) {
-                moves.push(mv);
-            } else if let Some(hc) = parse_handicap_line(line) {
-                handicap = Some(hc);
+
+            } else if line.starts_with("STO ") {
+                moves.push(parse_move_line(line)?);
+
+            } else if line.starts_with("SKI") {
+                // TODO: pass
+
+            } else if line.starts_with("INI ") {
+                handicap = parse_handicap_line(line)?;
             }
         }
 
@@ -86,7 +92,7 @@ impl Gib {
     }
 
     pub fn get_date(&self) -> Option<LocalDate> {
-        self.get_attribute("GAMEDATE").map(parse_gib_date).flatten()
+        self.get_attribute("GAMEDATE").map(|d| parse_gib_date(d).ok()).flatten()
     }
 
     pub fn get_game_place(&self) -> Option<&str> {
@@ -101,15 +107,6 @@ impl Score {
     }
 }
 
-impl BoardCoordinate {
-    fn from_gib(x: &str, y: &str) -> GibResult<BoardCoordinate> {
-        Ok(BoardCoordinate {
-            x: x.parse().map_err(|e: ParseIntError| e.to_string())?,
-            y: y.parse().map_err(|e: ParseIntError| e.to_string())?,
-        })
-    }
-}
-
 impl PlayerColor {
     fn from_gib(s: &str) -> Result<PlayerColor, GibParseError> {
         match s {
@@ -119,7 +116,6 @@ impl PlayerColor {
         }
     }
 }
-
 
 impl GameResult {
     fn parse_info_attributes(s: &str) -> HashMap<String, String> {
@@ -154,16 +150,23 @@ impl GameResult {
     }
 }
 
-fn parse_gib_date(str: &str) -> Option<LocalDate> {
+/// Parses gib-formatted date into a LocalDate
+fn parse_gib_date(str: &str) -> GibResult<LocalDate> {
     let mut lexer = Lexer::new(str);
 
-    let year = lexer.read_until("- ").parse::<i16>().ok()?;
-    lexer.skip_while("- ");
-    let month = lexer.read_until("- ").parse::<i8>().ok()?;
-    lexer.skip_while("- ");
-    let day = lexer.read_until("- ").parse::<i8>().ok()?;
+    let year = lexer.read_number::<i16>()?;
+    lexer.expect("-")?;
+    lexer.optional(" ");
+    let month = lexer.read_number::<i8>()?;
+    lexer.expect("-")?;
+    lexer.optional(" ");
+    let day = lexer.read_number::<i8>()?;
 
-    LocalDate::ymd(year, month, day)
+    if let Some(d) = LocalDate::ymd(year, month, day) {
+        Ok(d)
+    } else {
+        Err(format!("invalid date {}-{}-{}", year, month, day))
+    }
 }
 
 /// Extract name and rank from name attribute of form `name (rank)`.
@@ -180,90 +183,55 @@ fn parse_gib_name(str: &str) -> Option<(&str, &str)> {
 }
 
 /// Extract key and value from line of form `\[key=value\]`
-fn parse_metadata_line(str: &str) -> Option<(&str, &str)> {
+fn parse_metadata_line(str: &str) -> GibResult<(&str, &str)> {
     let trimmed = str.trim();
     if trimmed.starts_with(r"\[") && trimmed.ends_with(r"\]") {
-        if let Some(index) = trimmed.find('=') {
-            let name = &trimmed[2..index];
-            let value = &trimmed[index + 1..trimmed.len() - 2];
-            return Some((name, value));
+        let contents = &trimmed[2..trimmed.len() - 2];
+        if let Some(index) = contents.find('=') {
+            let name = &contents[..index];
+            let value = &contents[index + 1..];
+            return Ok((name, value));
         }
     }
-    None
+    Err(format!("invalid metadata line: '{}'", str))
 }
 
-/// Extract move from line of form `STO 0 <num> <player> <x> <y`
+/// Extract move from line of form `STO <num> <num> <player> <x> <y>`
 ///
 /// Assumes that the moves are in order and we don't need move numbers for anything
-fn parse_move_line(str: &str) -> Option<GoMove> {
-    let trimmed = str.trim();
+fn parse_move_line(str: &str) -> GibResult<GoMove> {
+    let mut lexer = Lexer::new(str);
+    lexer.expect("STO ")?;
 
-    let prefix = "STO 0 ";
-    if trimmed.starts_with(prefix) {
-        let mut lexer = Lexer::new(&trimmed[prefix.len()..]);
+    lexer.read_number::<i16>()?;
+    lexer.expect(" ")?;
+    lexer.read_number::<i16>()?;
+    lexer.expect(" ")?;
+    let player = PlayerColor::from_gib(lexer.read_while(|c| c != ' '))?;
+    lexer.expect(" ")?;
+    let x = lexer.read_number::<u8>()?;
+    lexer.expect(" ")?;
+    let y = lexer.read_number::<u8>()?;
 
-        lexer.read_until(" "); // num
-        lexer.skip_while(" ");
-        let player = PlayerColor::from_gib(lexer.read_until(" ")).ok()?;
-        lexer.skip_while(" ");
-        let x = lexer.read_until(" ");
-        lexer.skip_while(" ");
-        let y = lexer.read_until(" ");
-        let coordinate = BoardCoordinate::from_gib(x, y).ok()?;
-
-        return Some(GoMove { player, coordinate })
-    }
-
-    None
+    return Ok(GoMove { player, coordinate: BoardCoordinate { x, y } });
 }
 
 /// Extract handicap from line of form `INI <num> <num> <handicap>`
-fn parse_handicap_line(str: &str) -> Option<Handicap> {
+fn parse_handicap_line(str: &str) -> GibResult<Option<Handicap>> {
     let trimmed = str.trim();
 
     let prefix = "INI ";
-    if trimmed.starts_with(prefix) {
-        let mut lexer = Lexer::new(&trimmed[prefix.len()..]);
+    let mut lexer = Lexer::new(&trimmed[prefix.len()..]);
 
-        lexer.read_until(" "); // first num
-        lexer.skip_while(" ");
+    lexer.read_number::<i16>()?;
+    lexer.expect(" ")?;
 
-        lexer.read_until(" "); // second num
-        lexer.skip_while(" ");
+    lexer.read_number::<i16>()?;
+    lexer.expect(" ")?;
 
-        let stones = lexer.read_until(" ").parse::<u8>().ok()?;
-        lexer.skip_while(" ");
-        return Handicap::from(stones)
-    }
+    let stones = lexer.read_number::<u8>()?;
 
-    None
-}
-
-struct Lexer<'a> {
-    str: &'a str,
-    pos: usize,
-}
-
-impl <'a> Lexer<'a> {
-    fn new(str: &str) -> Lexer {
-        Lexer { str, pos: 0 }
-    }
-
-    fn read_until(&mut self, separators: &str) -> &'a str {
-        let start = self.pos;
-
-        while self.pos < self.str.len() && !separators.contains(&self.str[self.pos..self.pos + 1]) {
-            self.pos += 1;
-        }
-
-        return &self.str[start..self.pos];
-    }
-
-    fn skip_while(&mut self, characters: &str) {
-        while self.pos < self.str.len() && characters.contains(&self.str[self.pos..self.pos + 1]) {
-            self.pos += 1;
-        }
-    }
+    Ok(Handicap::from(stones))
 }
 
 #[cfg(test)]
@@ -307,7 +275,7 @@ STO 0 3 2 15 16
 
     #[test]
     fn test_date_parsing() {
-        assert_eq!(parse_gib_date("2020- 3-13-23-21-56"), LocalDate::ymd(2020, 3, 13));
+        assert_eq!(parse_gib_date("2020- 3-13-23-21-56").ok(), LocalDate::ymd(2020, 3, 13));
     }
 
     #[test]
