@@ -9,8 +9,6 @@
 //!   - probably many different interesting things
 //!
 use std::collections::HashMap;
-use regex::Regex;
-use std::ops::Index;
 use std::num::ParseIntError;
 use crate::go::{PlayerColor, BoardCoordinate, Score, GameResult, Handicap};
 use crate::time::LocalDate;
@@ -34,10 +32,6 @@ pub type GibParseError = String;
 
 impl Gib {
     pub fn parse(str: &str) -> GibResult<Gib> {
-        let metadata_regex = Regex::new(r"^\\\[(\w+)=(.*)\\]$").unwrap();
-        let move_regex = Regex::new(r"^STO 0 (\d+) (\d+) (\d+) (\d+)\s*$").unwrap();
-        let ini_regex = Regex::new(r"^INI \d+ \d+ (\d+) .+$").unwrap();
-
         let mut raw_attributes = HashMap::new();
         let mut moves = Vec::new();
         let mut handicap: Option<Handicap> = None;
@@ -47,20 +41,12 @@ impl Gib {
         // and just loop through everything looking for lines that match our regexes.
 
         for line in str.lines() {
-            if let Some(captures) = metadata_regex.captures(line) {
-                let key = captures.index(1);
-                let value = captures.index(2);
+            if let Some((key, value)) = parse_metadata_line(line) {
                 raw_attributes.insert(key.to_string(), value.to_string());
-            } else if let Some(captures) = move_regex.captures(line) {
-                // Assume that the moves are in order and we don't need move numbers for anything
-                moves.push(GoMove {
-                    player: PlayerColor::from_gib(captures.index(2))?,
-                    coordinate: BoardCoordinate::from_gib(captures.index(3), captures.index(4))?,
-                });
-            } else if let Some(captures) = ini_regex.captures(line) {
-                let handicap_str = captures.index(1);
-                let stones: u8 = handicap_str.parse().map_err(|_| format!("invalid handicap: {}", handicap_str))?;
-                handicap = Handicap::from(stones);
+            } else if let Some(mv) = parse_move_line(line) {
+                moves.push(mv);
+            } else if let Some(hc) = parse_handicap_line(line) {
+                handicap = Some(hc);
             }
         }
 
@@ -137,13 +123,14 @@ impl PlayerColor {
 
 impl GameResult {
     fn parse_info_attributes(s: &str) -> HashMap<String, String> {
-        let regex = Regex::new(r"^([^:]+):(.*)$").unwrap();
-
         let mut result = HashMap::new();
 
         for part in s.split(',') {
-            if let Some(captures) = regex.captures(part) {
-                result.insert(captures.index(1).to_string(), captures.index(2).to_string());
+            if let Some(pos) = part.find(':') {
+                let key = &part[..pos];
+                let value = &part[pos + 1..];
+
+                result.insert(key.to_string(), value.to_string());
             }
         }
 
@@ -168,22 +155,115 @@ impl GameResult {
 }
 
 fn parse_gib_date(str: &str) -> Option<LocalDate> {
-    let regex = Regex::new(r"^(\d{4})- ?(\d*)- ?(\d*)(-.+)?$").unwrap();
+    let mut lexer = Lexer::new(str);
 
-    let captures = regex.captures(str)?;
-    let year: i16 = captures.index(1).parse().ok()?;
-    let month: i8 = captures.index(2).parse().ok()?;
-    let day: i8 = captures.index(3).parse().ok()?;
+    let year = lexer.read_until("- ").parse::<i16>().ok()?;
+    lexer.skip_while("- ");
+    let month = lexer.read_until("- ").parse::<i8>().ok()?;
+    lexer.skip_while("- ");
+    let day = lexer.read_until("- ").parse::<i8>().ok()?;
+
     LocalDate::ymd(year, month, day)
 }
 
 /// Extract name and rank from name attribute of form `name (rank)`.
 fn parse_gib_name(str: &str) -> Option<(&str, &str)> {
-    let regex = Regex::new(r"^(.+) \((.+)\)$").unwrap();
-    let captures = regex.captures(str)?;
-    let name = captures.get(1)?.as_str();
-    let rank = captures.get(2)?.as_str();
-    Some((name, rank))
+    if str.ends_with(')') {
+        if let Some(index) = str.find(" (") {
+            let name = &str[..index];
+            let rank = &str[index + 2..str.len() - 1];
+            return Some((name, rank));
+        }
+    }
+
+    None
+}
+
+/// Extract key and value from line of form `\[key=value\]`
+fn parse_metadata_line(str: &str) -> Option<(&str, &str)> {
+    let trimmed = str.trim();
+    if trimmed.starts_with(r"\[") && trimmed.ends_with(r"\]") {
+        if let Some(index) = trimmed.find('=') {
+            let name = &trimmed[2..index];
+            let value = &trimmed[index + 1..trimmed.len() - 2];
+            return Some((name, value));
+        }
+    }
+    None
+}
+
+/// Extract move from line of form `STO 0 <num> <player> <x> <y`
+///
+/// Assumes that the moves are in order and we don't need move numbers for anything
+fn parse_move_line(str: &str) -> Option<GoMove> {
+    let trimmed = str.trim();
+
+    let prefix = "STO 0 ";
+    if trimmed.starts_with(prefix) {
+        let mut lexer = Lexer::new(&trimmed[prefix.len()..]);
+
+        lexer.read_until(" "); // num
+        lexer.skip_while(" ");
+        let player = PlayerColor::from_gib(lexer.read_until(" ")).ok()?;
+        lexer.skip_while(" ");
+        let x = lexer.read_until(" ");
+        lexer.skip_while(" ");
+        let y = lexer.read_until(" ");
+        let coordinate = BoardCoordinate::from_gib(x, y).ok()?;
+
+        return Some(GoMove { player, coordinate })
+    }
+
+    None
+}
+
+/// Extract handicap from line of form `INI <num> <num> <handicap>`
+fn parse_handicap_line(str: &str) -> Option<Handicap> {
+    let trimmed = str.trim();
+
+    let prefix = "INI ";
+    if trimmed.starts_with(prefix) {
+        let mut lexer = Lexer::new(&trimmed[prefix.len()..]);
+
+        lexer.read_until(" "); // first num
+        lexer.skip_while(" ");
+
+        lexer.read_until(" "); // second num
+        lexer.skip_while(" ");
+
+        let stones = lexer.read_until(" ").parse::<u8>().ok()?;
+        lexer.skip_while(" ");
+        return Handicap::from(stones)
+    }
+
+    None
+}
+
+struct Lexer<'a> {
+    str: &'a str,
+    pos: usize,
+}
+
+impl <'a> Lexer<'a> {
+    fn new(str: &str) -> Lexer {
+        Lexer { str, pos: 0 }
+    }
+
+    fn read_until(&mut self, separators: &str) -> &'a str {
+        let start = self.pos;
+
+        while self.pos < self.str.len() && !separators.contains(&self.str[self.pos..self.pos + 1]) {
+            self.pos += 1;
+        }
+
+        return &self.str[start..self.pos];
+    }
+
+    fn skip_while(&mut self, characters: &str) {
+        while self.pos < self.str.len() && characters.contains(&self.str[self.pos..self.pos + 1]) {
+            self.pos += 1;
+        }
+    }
 }
 
 #[cfg(test)]
@@ -219,10 +299,10 @@ STO 0 3 2 15 16
         assert_eq!(gib.get_game_place(), Some("Tygem Baduk"));
 
         assert_eq!(gib.get_moves().len(), 2);
-        assert_eq!(gib.get_moves().index(0).player, PlayerColor::Black);
-        assert_eq!(gib.get_moves().index(0).coordinate, BoardCoordinate::new(16, 3));
-        assert_eq!(gib.get_moves().index(1).player, PlayerColor::White);
-        assert_eq!(gib.get_moves().index(1).coordinate, BoardCoordinate::new(15, 16));
+        assert_eq!(gib.get_moves()[0].player, PlayerColor::Black);
+        assert_eq!(gib.get_moves()[0].coordinate, BoardCoordinate::new(16, 3));
+        assert_eq!(gib.get_moves()[1].player, PlayerColor::White);
+        assert_eq!(gib.get_moves()[1].coordinate, BoardCoordinate::new(15, 16));
     }
 
     #[test]
