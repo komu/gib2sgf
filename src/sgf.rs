@@ -83,6 +83,10 @@ impl SgfNode {
         self.properties.insert(name.to_string(), vec![value.to_sgf()]);
     }
 
+    pub fn set_property_list(&mut self, name: &str, values: Vec<impl ToSgf>) {
+        self.properties.insert(name.to_string(), values.iter().map(|v| v.to_sgf()).collect());
+    }
+
     pub fn set_property_maybe(&mut self, name: &str, value: Option<impl ToSgf>) {
         if let Some(v) = value {
             self.set_property(name, v)

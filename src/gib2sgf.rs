@@ -35,9 +35,7 @@ pub fn gib_to_sgf(gib_data: &str) -> Result<String, GibParseError> {
 
     if let Some(handicap) = gib.get_handicap() {
         root.set_property("HA", handicap);
-        for point in handicap.handicap_points() {
-            root.set_property("AB", point)
-        }
+        root.set_property_list("AB", handicap.handicap_points())
     }
 
     let mut game = SgfTree::new();
