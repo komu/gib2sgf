@@ -9,7 +9,7 @@
 //!   - probably many different interesting things
 //!
 use std::collections::HashMap;
-use crate::go::{PlayerColor, BoardCoordinate, Score, GameResult, Handicap};
+use crate::go::{PlayerColor, Score, GameResult, Handicap, GoMove};
 use crate::time::LocalDate;
 use crate::lexer::Lexer;
 
@@ -18,12 +18,6 @@ pub struct Gib {
     raw_attributes: HashMap<String, String>,
     handicap: Option<Handicap>,
     moves: Vec<GoMove>,
-}
-
-#[derive(Debug)]
-pub struct GoMove {
-    pub player: PlayerColor,
-    pub coordinate: BoardCoordinate,
 }
 
 type GibResult<T> = Result<T, GibParseError>;
@@ -44,15 +38,18 @@ impl Gib {
             if line.starts_with(r"\[") {
                 let (key, value) = parse_metadata_line(line)?;
                 raw_attributes.insert(key.to_string(), value.to_string());
-
             } else if line.starts_with("STO ") {
-                moves.push(parse_move_line(line)?);
-
+                moves.push(parse_place_stone(line)?);
             } else if line.starts_with("SKI") {
                 // TODO: pass
-
             } else if line.starts_with("INI ") {
                 handicap = parse_handicap_line(line)?;
+            } else if line == r"\HS" || line == r"\HE" || line == r"\GS" || line == r"\GE" {
+                // ignore known
+            } else if line == "2 1 0" || line == "2 5 0" || line.ends_with("&4") {
+                // ignore known 2
+            } else {
+                // ignore for now
             }
         }
 
@@ -73,14 +70,12 @@ impl Gib {
 
     pub fn get_nick(&self, color: PlayerColor) -> Option<&str> {
         let attribute = self.get_attribute(color.pick("GAMEBLACKNAME", "GAMEWHITENAME"))?;
-        let (name, _) = parse_gib_name(attribute)?;
-        Some(name)
+        parse_gib_name(attribute).0
     }
 
     pub fn get_rank(&self, color: PlayerColor) -> Option<&str> {
         let attribute = self.get_attribute(color.pick("GAMEBLACKNAME", "GAMEWHITENAME"))?;
-        let (_, rank) = parse_gib_name(attribute)?;
-        Some(rank)
+        parse_gib_name(attribute).1
     }
 
     pub fn get_komi(&self) -> Option<Score> {
@@ -166,16 +161,20 @@ fn parse_gib_date(str: &str) -> GibResult<LocalDate> {
 }
 
 /// Extract name and rank from name attribute of form `name (rank)`.
-fn parse_gib_name(str: &str) -> Option<(&str, &str)> {
+fn parse_gib_name(str: &str) -> (Option<&str>, Option<&str>) {
+    if str.is_empty() {
+        return (None, None);
+    }
+
     if str.ends_with(')') {
         if let Some(index) = str.find(" (") {
             let name = &str[..index];
             let rank = &str[index + 2..str.len() - 1];
-            return Some((name, rank));
+            return (Some(name), Some(rank));
         }
     }
 
-    None
+    (Some(str), None)
 }
 
 /// Extract key and value from line of form `\[key=value\]`
@@ -195,7 +194,7 @@ fn parse_metadata_line(str: &str) -> GibResult<(&str, &str)> {
 /// Extract move from line of form `STO <num> <num> <player> <x> <y>`
 ///
 /// Assumes that the moves are in order and we don't need move numbers for anything
-fn parse_move_line(str: &str) -> GibResult<GoMove> {
+fn parse_place_stone(str: &str) -> GibResult<GoMove> {
     let mut lexer = Lexer::new(str);
     lexer.expect("STO ")?;
 
@@ -209,7 +208,7 @@ fn parse_move_line(str: &str) -> GibResult<GoMove> {
     lexer.expect(" ")?;
     let y = lexer.read_number::<u8>()?;
 
-    Ok(GoMove { player, coordinate: BoardCoordinate { x, y } })
+    Ok(GoMove::place_stone(player, (x, y)))
 }
 
 /// Extract handicap from line of form `INI <num> <num> <handicap>`
@@ -233,7 +232,7 @@ fn parse_handicap_line(str: &str) -> GibResult<Option<Handicap>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::go::PlayerColor::Black;
+    use crate::go::{GoMove, PlayerColor::{Black, White}};
 
     #[test]
     fn test_parsing() {
@@ -263,15 +262,16 @@ STO 0 3 2 15 16
         assert_eq!(gib.get_game_place(), Some("Tygem Baduk"));
 
         assert_eq!(gib.get_moves().len(), 2);
-        assert_eq!(gib.get_moves()[0].player, PlayerColor::Black);
-        assert_eq!(gib.get_moves()[0].coordinate, BoardCoordinate::new(16, 3));
-        assert_eq!(gib.get_moves()[1].player, PlayerColor::White);
-        assert_eq!(gib.get_moves()[1].coordinate, BoardCoordinate::new(15, 16));
+        assert_eq!(gib.get_moves()[0], GoMove::place_stone(Black, (16, 3)));
+        assert_eq!(gib.get_moves()[1], GoMove::place_stone(White, (15, 16)));
     }
 
     #[test]
     fn test_date_parsing() {
+        assert_eq!(parse_gib_date("2020-10-13-23-21-56"), LocalDate::ymd(2020, 10, 13));
+        assert_eq!(parse_gib_date("2020-10- 5-23-21-56"), LocalDate::ymd(2020, 10, 5));
         assert_eq!(parse_gib_date("2020- 3-13-23-21-56"), LocalDate::ymd(2020, 3, 13));
+        assert_eq!(parse_gib_date("2021- 3- 4- 3- 1- 6"), LocalDate::ymd(2021, 3, 4));
     }
 
     #[test]
@@ -283,8 +283,8 @@ STO 0 3 2 15 16
 
     #[test]
     fn test_parse_name() {
-        assert_eq!(parse_gib_name(""), None);
-        assert_eq!(parse_gib_name("Foo"), None);
-        assert_eq!(parse_gib_name("Foo (2D)"), Some(("Foo", "2D")));
+        assert_eq!(parse_gib_name(""), (None, None));
+        assert_eq!(parse_gib_name("Foo"), (Some("Foo"), None));
+        assert_eq!(parse_gib_name("Foo (2D)"), (Some("Foo"), Some("2D")));
     }
 }

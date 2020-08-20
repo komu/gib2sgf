@@ -1,6 +1,7 @@
 use crate::gib::{Gib, GibParseError};
 use crate::sgf::{SgfCollection, SgfTree, SgfNode};
-use crate::go::PlayerColor;
+use crate::go::{PlayerColor, GoMove};
+use GoMove::{PlaceStone, Pass};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -42,7 +43,12 @@ pub fn gib_to_sgf(gib_data: &str) -> Result<String, GibParseError> {
     let mut game = SgfTree::new();
     game.add_node(root);
     for mv in gib.get_moves() {
-        game.add_move(mv.player, mv.coordinate)
+        match *mv {
+            PlaceStone { player, coordinate } => game.add_move(player, coordinate),
+            Pass { .. } => {
+                // TODO: support passes
+            }
+        }
     }
 
     let sgf = SgfCollection::from_game(game);
