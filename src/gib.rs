@@ -4,7 +4,6 @@
 //! https://senseis.xmp.net/?GIB
 //!
 //! Things not yet supported:
-//!   - handicaps
 //!   - time settings
 //!   - probably many different interesting things
 //!
