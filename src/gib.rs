@@ -78,15 +78,15 @@ impl Gib {
     }
 
     pub fn get_komi(&self) -> Option<Score> {
-        self.get_attribute("GAMEGONGJE").map(Score::from_gib).flatten()
+        self.get_attribute("GAMEGONGJE").and_then(Score::from_gib)
     }
 
     pub fn get_result(&self) -> Option<GameResult> {
-        self.get_attribute("GAMEINFOMAIN").map(GameResult::from_gib).flatten()
+        self.get_attribute("GAMEINFOMAIN").and_then(GameResult::from_gib)
     }
 
     pub fn get_date(&self) -> Option<LocalDate> {
-        self.get_attribute("GAMEDATE").map(|d| parse_gib_date(d).ok()).flatten()
+        self.get_attribute("GAMEDATE").and_then(|d| parse_gib_date(d).ok())
     }
 
     pub fn get_game_place(&self) -> Option<&str> {
@@ -130,7 +130,7 @@ impl GameResult {
     fn from_gib(game_info_main: &str) -> Option<GameResult> {
         let attributes = GameResult::parse_info_attributes(game_info_main);
 
-        let score = attributes.get("ZIPSU").map(|s| Score::from_gib(s.as_str())).flatten();
+        let score = attributes.get("ZIPSU").and_then(|s| Score::from_gib(s.as_str()));
         let grlt = attributes.get("GRLT")?.as_str();
         match grlt {
             "0" => Some(GameResult::Count(PlayerColor::Black, score)),

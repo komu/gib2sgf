@@ -16,6 +16,7 @@ pub struct BoardCoordinate {
 }
 
 #[derive(Debug, Eq, PartialEq)]
+#[allow(unused)]
 pub enum GoMove {
     PlaceStone { player: PlayerColor, coordinate: BoardCoordinate },
     Pass { player: PlayerColor },

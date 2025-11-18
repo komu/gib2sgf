@@ -58,5 +58,5 @@ fn remove_app_version_from_sgf(str: &str) -> String {
             return format!("{}{}", &str[..start], &suffix[end + 1..]);
         }
     }
-    return str.to_string();
+    str.to_string()
 }

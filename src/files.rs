@@ -12,7 +12,7 @@ fn collect_files_into(dir: &Path, result: &mut Vec<Box<Path>>) -> io::Result<()>
         for entry in fs::read_dir(dir)? {
             let entry = entry?;
             let path = entry.path();
-            let name = path.file_name().map(|s| s.to_str()).flatten().unwrap_or("");
+            let name = path.file_name().and_then(|s| s.to_str()).unwrap_or("");
             if path.is_dir() {
                 collect_files_into(&path, result)?;
             } else if path.is_file() && name.ends_with(".gib") || name.ends_with(".gib.dll") {
@@ -25,7 +25,7 @@ fn collect_files_into(dir: &Path, result: &mut Vec<Box<Path>>) -> io::Result<()>
 
 /// For some reason Tygem files names can end up with all kinds of junk
 pub fn normalize_path(path: &Path) -> PathBuf {
-    if let Some(str) = path.file_name().map(|n| n.to_str()).flatten() {
+    if let Some(str) = path.file_name().and_then(|n| n.to_str()) {
         path.with_file_name(normalize_file_name(str))
     } else {
         path.to_path_buf()

@@ -7,7 +7,7 @@ pub struct LocalDate {
 
 impl LocalDate {
     pub fn ymd(year: u16, month: u8, day: u8) -> Result<LocalDate, String> {
-        if month >= 1 && month <= 12 && day >= 1 && day <= days_in_month(month, year) {
+        if (1..=12).contains(&month) && day >= 1 && day <= days_in_month(month, year) {
             Ok(LocalDate { year, month, day })
         } else {
             Err(format!("invalid month {:04}-{:02}-{:02}", year, month, day))
