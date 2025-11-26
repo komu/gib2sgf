@@ -15,6 +15,7 @@ use crate::lexer::Lexer;
 #[derive(Debug)]
 pub struct Gib {
     raw_attributes: HashMap<String, String>,
+    parsed_attributes: HashMap<String, HashMap<String, String>>,
     handicap: Option<Handicap>,
     moves: Vec<GoMove>,
 }
@@ -26,6 +27,7 @@ pub type GibParseError = String;
 impl Gib {
     pub fn parse(str: &str) -> GibResult<Gib> {
         let mut raw_attributes = HashMap::new();
+        let mut parsed_attributes = HashMap::new();
         let mut moves = Vec::new();
         let mut handicap: Option<Handicap> = None;
 
@@ -52,7 +54,15 @@ impl Gib {
             }
         }
 
-        Ok(Gib { raw_attributes, handicap, moves })
+        // Pre-parse structured attributes like GAMETAG, BUSERINFO, WUSERINFO, GAMEINFOSUB
+        for (key, value) in &raw_attributes {
+            if key == "GAMETAG" || key == "BUSERINFO" || key == "WUSERINFO"
+               || key == "GAMEINFOMAIN" || key == "GAMEINFOSUB" {
+                parsed_attributes.insert(key.clone(), GameResult::parse_info_attributes(value));
+            }
+        }
+
+        Ok(Gib { raw_attributes, parsed_attributes, handicap, moves })
     }
 
     pub fn get_moves(&self) -> &Vec<GoMove> {
@@ -68,17 +78,65 @@ impl Gib {
     }
 
     pub fn get_nick(&self, color: PlayerColor) -> Option<&str> {
-        let attribute = self.get_attribute(color.pick("GAMEBLACKNAME", "GAMEWHITENAME"))?;
-        parse_gib_name(attribute).0
+        // Try old format first
+        if let Some(attribute) = self.get_attribute(color.pick("GAMEBLACKNAME", "GAMEWHITENAME")) {
+            return parse_gib_name(attribute).0;
+        }
+
+        // Try new GAMETAG format: A:name,B:name
+        if let Some(gametag) = self.parsed_attributes.get("GAMETAG") {
+            if let Some(name) = gametag.get(color.pick("B", "A")) {
+                return Some(name.as_str());
+            }
+        }
+
+        // Try USERINFO format: BNICK:name or WNICK:name
+        if let Some(userinfo) = self.parsed_attributes.get(color.pick("BUSERINFO", "WUSERINFO")) {
+            if let Some(nick) = userinfo.get(color.pick("BNICK", "WNICK")) {
+                return Some(nick.as_str());
+            }
+        }
+
+        None
     }
 
     pub fn get_rank(&self, color: PlayerColor) -> Option<&str> {
-        let attribute = self.get_attribute(color.pick("GAMEBLACKNAME", "GAMEWHITENAME"))?;
-        parse_gib_name(attribute).1
+        // Try old format first
+        if let Some(attribute) = self.get_attribute(color.pick("GAMEBLACKNAME", "GAMEWHITENAME")) {
+            return parse_gib_name(attribute).1;
+        }
+
+        // Try GAMETAG format: L:rank,N:rank (rank levels)
+        if let Some(gametag) = self.parsed_attributes.get("GAMETAG") {
+            if let Some(level) = gametag.get(color.pick("N", "L")) {
+                return Some(level.as_str());
+            }
+        }
+
+        // Try USERINFO format: BLV:level or WLV:level
+        if let Some(userinfo) = self.parsed_attributes.get(color.pick("BUSERINFO", "WUSERINFO")) {
+            if let Some(level) = userinfo.get(color.pick("BLV", "WLV")) {
+                return Some(level.as_str());
+            }
+        }
+
+        None
     }
 
     pub fn get_komi(&self) -> Option<Score> {
-        self.get_attribute("GAMEGONGJE").and_then(Score::from_gib)
+        // Try old format
+        if let Some(komi) = self.get_attribute("GAMEGONGJE") {
+            return Score::from_gib(komi);
+        }
+
+        // Try GAMEINFOMAIN format: GONGJE:65
+        if let Some(gameinfomain) = self.parsed_attributes.get("GAMEINFOMAIN") {
+            if let Some(komi) = gameinfomain.get("GONGJE") {
+                return Score::from_gib(komi);
+            }
+        }
+
+        None
     }
 
     pub fn get_result(&self) -> Option<GameResult> {
@@ -86,11 +144,42 @@ impl Gib {
     }
 
     pub fn get_date(&self) -> Option<LocalDate> {
-        self.get_attribute("GAMEDATE").and_then(|d| parse_gib_date(d).ok())
+        // Try old format
+        if let Some(date) = self.get_attribute("GAMEDATE") {
+            return parse_gib_date(date).ok();
+        }
+
+        // Try GAMEINFOSUB format: GDATE:date
+        if let Some(gameinfosub) = self.parsed_attributes.get("GAMEINFOSUB") {
+            if let Some(date) = gameinfosub.get("GDATE") {
+                return parse_gib_date(date).ok();
+            }
+        }
+
+        // Try GAMETAG format: C:date
+        if let Some(gametag) = self.parsed_attributes.get("GAMETAG") {
+            if let Some(date) = gametag.get("C") {
+                return parse_gib_date(date).ok();
+            }
+        }
+
+        None
     }
 
     pub fn get_game_place(&self) -> Option<&str> {
-        self.get_attribute("GAMEPLACE")
+        // Try old format
+        if let Some(place) = self.get_attribute("GAMEPLACE") {
+            return Some(place);
+        }
+
+        // Try GAMEINFOSUB format: GPLC:place
+        if let Some(gameinfosub) = self.parsed_attributes.get("GAMEINFOSUB") {
+            if let Some(place) = gameinfosub.get("GPLC") {
+                return Some(place.as_str());
+            }
+        }
+
+        None
     }
 }
 
